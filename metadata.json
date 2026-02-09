@@ -1,0 +1,5 @@
+{
+  "name": "Crown Academy Lost & Found",
+  "description": "A Lost and Found web application for Crown Academy. Features user accounts for item submission and tracking, and an admin dashboard for content moderation and management.",
+  "requestFramePermissions": []
+}
