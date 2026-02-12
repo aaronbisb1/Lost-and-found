@@ -28,28 +28,11 @@ const Header: React.FC<HeaderProps> = ({ setView, currentUser, onLogout }) => {
         <div className="flex items-center gap-3 cursor-pointer" onClick={() => setView(View.FEED)}>
           <SchoolLogoIcon className="h-10 w-10" />
           <h1 className="text-xl font-bold text-slate-800">
-            Crown Academy <span className="font-normal text-slate-500">Lost & Found</span>
+            BISB <span className="font-normal text-slate-500">Lost & Found</span>
           </h1>
         </div>
         <div className="flex items-center gap-2">
           <NavButton onClick={() => setView(View.FEED)}>Feed</NavButton>
           {currentUser ? (
             <>
-              {currentUser.isAdmin && <NavButton onClick={() => setView(View.ADMIN)}>Admin</NavButton>}
-              <NavButton onClick={() => setView(View.MY_ITEMS)}>My Items</NavButton>
-              <NavButton onClick={onLogout}>Logout</NavButton>
-              <NavButton onClick={() => setView(View.SUBMIT)} primary>Submit Item</NavButton>
-            </>
-          ) : (
-            <>
-              <NavButton onClick={() => setView(View.LOGIN)}>Login</NavButton>
-              <NavButton onClick={() => setView(View.REGISTER)} primary>Register</NavButton>
-            </>
-          )}
-        </div>
-      </nav>
-    </header>
-  );
-};
-
-export default Header;
+              {currentUser.isAdmin && <Nav
