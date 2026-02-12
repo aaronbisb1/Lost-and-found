@@ -35,4 +35,21 @@ const Header: React.FC<HeaderProps> = ({ setView, currentUser, onLogout }) => {
           <NavButton onClick={() => setView(View.FEED)}>Feed</NavButton>
           {currentUser ? (
             <>
-              {currentUser.isAdmin && <Nav
+              {currentUser.isAdmin && <NavButton onClick={() => setView(View.ADMIN)}>Admin</NavButton>}
+              <NavButton onClick={() => setView(View.MY_ITEMS)}>My Items</NavButton>
+              <NavButton onClick={onLogout}>Logout</NavButton>
+              <NavButton onClick={() => setView(View.SUBMIT)} primary>Submit Item</NavButton>
+            </>
+          ) : (
+            <>
+              <NavButton onClick={() => setView(View.LOGIN)}>Login</NavButton>
+              <NavButton onClick={() => setView(View.REGISTER)} primary>Register</NavButton>
+            </>
+          )}
+        </div>
+      </nav>
+    </header>
+  );
+};
+
+export default Header;
