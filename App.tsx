@@ -11,6 +11,7 @@ import EditItemModal from './components/EditItemModal';
 import VerifyEmail from './components/VerifyEmail';
 import { Item, View, ItemType, ItemStatus, Filter, User } from './types';
 import { sendVerificationEmail } from './emailService';
+import { isFirebaseConfigured, itemsRef, usersRef, onValue, set, remove, update, ref, database } from './firebaseConfig';
 
 // --- Password Hashing Utility ---
 // IMPORTANT: This is a simple, client-side hashing demonstration for a school project.
@@ -36,33 +37,62 @@ const App: React.FC = () => {
   const [filter, setFilter] = useState<Filter>({ type: 'all', location: '', dateSort: 'newest', searchQuery: '' });
   const [emailToVerify, setEmailToVerify] = useState<string | null>(null);
 
-  // --- Data Persistence with localStorage ---
+  // --- Data Persistence with Firebase or localStorage ---
   useEffect(() => {
-    // Initialize data from localStorage on first load
-    const savedUsers = localStorage.getItem('lostAndFoundUsers');
-    const savedItems = localStorage.getItem('lostAndFoundItems');
+    const useFirebase = isFirebaseConfigured();
     
-    if (savedUsers) {
-      setUsers(JSON.parse(savedUsers));
-    } else {
-      // Seed an admin user if no users exist
-      hashPassword('schooladmin123').then(hash => {
-        const adminUser = { id: 'admin-user', email: 'admin@school.com', passwordHash: hash, isAdmin: true, isVerified: true };
-        setUsers([adminUser]);
+    if (useFirebase) {
+      // Load users from Firebase
+      const unsubscribeUsers = onValue(usersRef, (snapshot) => {
+        const data = snapshot.val();
+        setUsers(data ? Object.values(data) : []);
+      }, (error) => {
+        console.warn('Failed to load users from Firebase, using localStorage', error);
+        const savedUsers = localStorage.getItem('lostAndFoundUsers');
+        if (savedUsers) setUsers(JSON.parse(savedUsers));
       });
-    }
 
-    if (savedItems) {
-      setItems(JSON.parse(savedItems));
+      // Load items from Firebase with real-time sync
+      const unsubscribeItems = onValue(itemsRef, (snapshot) => {
+        const data = snapshot.val();
+        setItems(data ? Object.values(data) : []);
+      }, (error) => {
+        console.warn('Failed to load items from Firebase, using localStorage', error);
+        const savedItems = localStorage.getItem('lostAndFoundItems');
+        if (savedItems) setItems(JSON.parse(savedItems));
+      });
+
+      return () => {
+        unsubscribeUsers();
+        unsubscribeItems();
+      };
     } else {
-      // Seed with mock data
-      setItems([
-        { id: '1', name: 'Student ID Card', description: 'Belongs to Jane Doe, Grade 11.', location: 'Cafeteria', date: '2024-05-10', type: ItemType.LOST, status: ItemStatus.APPROVED, userId: 'user-1', imageUrl: 'https://picsum.photos/id/101/400/300' },
-        { id: '2', name: 'Blue Water Bottle', description: 'HydroFlask with a sticker of a planet.', location: 'Gym', date: '2024-05-12', type: ItemType.FOUND, status: ItemStatus.APPROVED, userId: 'user-2', imageUrl: 'https://picsum.photos/id/102/400/300' },
-        { id: '3', name: 'Physics Textbook', description: 'Has highlighting on chapter 3.', location: 'Library', date: '2024-05-09', type: ItemType.LOST, status: ItemStatus.APPROVED, userId: 'user-1', imageUrl: 'https://picsum.photos/id/103/400/300' },
-        { id: '4', name: 'Wireless Earbuds', description: 'A single white earbud in its case.', location: 'Courtyard', date: '2024-05-11', type: ItemType.FOUND, status: ItemStatus.PENDING, userId: 'user-2', imageUrl: 'https://picsum.photos/id/104/400/300' },
-        { id: '5', name: 'Black Hoodie', description: 'Plain black hoodie, size medium.', location: 'Main Hall', date: '2024-05-13', type: ItemType.FOUND, status: ItemStatus.PENDING, userId: 'admin-user', imageUrl: 'https://picsum.photos/id/106/400/300' },
-      ]);
+      // Fallback to localStorage if Firebase is not configured
+      const savedUsers = localStorage.getItem('lostAndFoundUsers');
+      const savedItems = localStorage.getItem('lostAndFoundItems');
+      
+      if (savedUsers) {
+        setUsers(JSON.parse(savedUsers));
+      } else {
+        // Seed an admin user if no users exist
+        hashPassword('schooladmin123').then(hash => {
+          const adminUser = { id: 'admin-user', email: 'admin@school.com', passwordHash: hash, isAdmin: true, isVerified: true };
+          setUsers([adminUser]);
+        });
+      }
+
+      if (savedItems) {
+        setItems(JSON.parse(savedItems));
+      } else {
+        // Seed with mock data
+        setItems([
+          { id: '1', name: 'Student ID Card', description: 'Belongs to Jane Doe, Grade 11.', location: 'Cafeteria', date: '2024-05-10', type: ItemType.LOST, status: ItemStatus.APPROVED, userId: 'user-1', imageUrl: 'https://picsum.photos/id/101/400/300' },
+          { id: '2', name: 'Blue Water Bottle', description: 'HydroFlask with a sticker of a planet.', location: 'Gym', date: '2024-05-12', type: ItemType.FOUND, status: ItemStatus.APPROVED, userId: 'user-2', imageUrl: 'https://picsum.photos/id/102/400/300' },
+          { id: '3', name: 'Physics Textbook', description: 'Has highlighting on chapter 3.', location: 'Library', date: '2024-05-09', type: ItemType.LOST, status: ItemStatus.APPROVED, userId: 'user-1', imageUrl: 'https://picsum.photos/id/103/400/300' },
+          { id: '4', name: 'Wireless Earbuds', description: 'A single white earbud in its case.', location: 'Courtyard', date: '2024-05-11', type: ItemType.FOUND, status: ItemStatus.PENDING, userId: 'user-2', imageUrl: 'https://picsum.photos/id/104/400/300' },
+          { id: '5', name: 'Black Hoodie', description: 'Plain black hoodie, size medium.', location: 'Main Hall', date: '2024-05-13', type: ItemType.FOUND, status: ItemStatus.PENDING, userId: 'admin-user', imageUrl: 'https://picsum.photos/id/106/400/300' },
+        ]);
+      }
     }
     
     const sessionUser = sessionStorage.getItem('lostAndFoundCurrentUser');
@@ -73,13 +103,39 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (users.length > 0) {
-      localStorage.setItem('lostAndFoundUsers', JSON.stringify(users));
+      if (isFirebaseConfigured()) {
+        // Save users to Firebase
+        const usersObj: Record<string, User> = {};
+        users.forEach(user => {
+          usersObj[user.id] = user;
+        });
+        set(usersRef, usersObj).catch(err => {
+          console.warn('Failed to save users to Firebase, using localStorage', err);
+          localStorage.setItem('lostAndFoundUsers', JSON.stringify(users));
+        });
+      } else {
+        // Fallback to localStorage
+        localStorage.setItem('lostAndFoundUsers', JSON.stringify(users));
+      }
     }
   }, [users]);
 
   useEffect(() => {
     if (items.length > 0) {
-      localStorage.setItem('lostAndFoundItems', JSON.stringify(items));
+      if (isFirebaseConfigured()) {
+        // Save items to Firebase - this will trigger real-time updates for all users
+        const itemsObj: Record<string, Item> = {};
+        items.forEach(item => {
+          itemsObj[item.id] = item;
+        });
+        set(itemsRef, itemsObj).catch(err => {
+          console.warn('Failed to save items to Firebase, using localStorage', err);
+          localStorage.setItem('lostAndFoundItems', JSON.stringify(items));
+        });
+      } else {
+        // Fallback to localStorage
+        localStorage.setItem('lostAndFoundItems', JSON.stringify(items));
+      }
     }
   }, [items]);
 
@@ -206,6 +262,10 @@ const App: React.FC = () => {
 
   const deleteItem = (id: string) => {
     setItems(items.filter(item => item.id !== id));
+    if (isFirebaseConfigured()) {
+      // Also delete from Firebase
+      remove(ref(database, `items/${id}`)).catch(err => console.warn('Failed to delete from Firebase', err));
+    }
   };
 
   // --- Memoized Data for Performance ---
