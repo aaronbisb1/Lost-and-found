@@ -47,13 +47,19 @@ const App: React.FC = () => {
         const data = snapshot.val();
         const loadedUsers = data ? Object.values(data) : [];
         
+        console.log('Firebase users loaded:', loadedUsers);
+        
         // Seed admin user if database is empty
         if (loadedUsers.length === 0) {
+          console.log('Database empty, seeding admin user...');
           hashPassword('schooladmin123').then(hash => {
             const adminUser = { id: 'admin-user', email: 'admin@school.com', passwordHash: hash, isAdmin: true, isVerified: true };
+            console.log('Admin user hash:', hash);
             setUsers([adminUser]);
             // Save to Firebase
             set(usersRef, { 'admin-user': adminUser }).catch(err => console.warn('Failed to seed admin user', err));
+            // Also save to localStorage as backup
+            localStorage.setItem('lostAndFoundUsers', JSON.stringify([adminUser]));
           });
         } else {
           setUsers(loadedUsers);
@@ -61,7 +67,16 @@ const App: React.FC = () => {
       }, (error) => {
         console.warn('Failed to load users from Firebase, using localStorage', error);
         const savedUsers = localStorage.getItem('lostAndFoundUsers');
-        if (savedUsers) setUsers(JSON.parse(savedUsers));
+        if (savedUsers) {
+          setUsers(JSON.parse(savedUsers));
+        } else {
+          // Seed admin to localStorage
+          hashPassword('schooladmin123').then(hash => {
+            const adminUser = { id: 'admin-user', email: 'admin@school.com', passwordHash: hash, isAdmin: true, isVerified: true };
+            setUsers([adminUser]);
+            localStorage.setItem('lostAndFoundUsers', JSON.stringify([adminUser]));
+          });
+        }
       });
 
       // Load items from Firebase with real-time sync
@@ -223,9 +238,12 @@ const App: React.FC = () => {
   };
 
   const handleLogin = async (email: string, password: string): Promise<{success: boolean; error?: string}> => {
+    console.log('Login attempt for:', email);
+    console.log('Current users:', users);
     const user = users.find(u => u.email === email);
     if (user) {
       const passwordHash = await hashPassword(password);
+      console.log('Password hash match:', user.passwordHash === passwordHash);
       if (user.passwordHash === passwordHash) {
         if (!user.isVerified) {
           setEmailToVerify(email);
