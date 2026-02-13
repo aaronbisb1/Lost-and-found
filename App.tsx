@@ -10,6 +10,7 @@ import MyItems from './components/MyItems';
 import EditItemModal from './components/EditItemModal';
 import VerifyEmail from './components/VerifyEmail';
 import { Item, View, ItemType, ItemStatus, Filter, User } from './types';
+import { sendVerificationEmail } from './emailService';
 
 // --- Password Hashing Utility ---
 // IMPORTANT: This is a simple, client-side hashing demonstration for a school project.
@@ -93,7 +94,17 @@ const App: React.FC = () => {
     const newUser: User = { id: Date.now().toString(), email, passwordHash, isAdmin: false, isVerified: false, confirmationCode };
     setUsers([...users, newUser]);
     
-    alert(`Registration Successful!\n\nFor demonstration purposes, your verification code is: ${confirmationCode}\n\nPlease enter this code on the next screen.`);
+    // Store the verification code for retrieval
+    localStorage.setItem(`verificationCode_${email}`, confirmationCode);
+    
+    // Try to send verification email
+    const emailSent = await sendVerificationEmail(email, confirmationCode);
+    
+    if (emailSent) {
+      alert(`Registration Successful!\n\nA verification code has been sent to ${email}.\n\nPlease check your email and enter the code on the next screen.`);
+    } else {
+      alert(`Registration Successful!\n\nFor demonstration purposes, your verification code is:\n\n${confirmationCode}\n\n(Email could not be sent. Using demo mode.)`);
+    }
     
     setEmailToVerify(email);
     setView(View.VERIFY_EMAIL);
@@ -107,12 +118,40 @@ const App: React.FC = () => {
       delete updatedUser.confirmationCode; // Clean up the code
       setUsers(users.map(u => u.id === updatedUser.id ? updatedUser : u));
       
+      // Clean up stored verification code
+      if (emailToVerify) {
+        localStorage.removeItem(`verificationCode_${emailToVerify}`);
+      }
+      
       alert('Email verified successfully! You can now log in.');
       setEmailToVerify(null);
       setView(View.LOGIN);
       return true;
     }
     return false;
+  };
+
+  const handleResendCode = async () => {
+    const userToVerify = users.find(u => u.email === emailToVerify);
+    if (userToVerify) {
+      const newConfirmationCode = Math.floor(100000 + Math.random() * 900000).toString();
+      const updatedUser = { ...userToVerify, confirmationCode: newConfirmationCode };
+      setUsers(users.map(u => u.id === updatedUser.id ? updatedUser : u));
+      
+      // Update stored verification code
+      if (emailToVerify) {
+        localStorage.setItem(`verificationCode_${emailToVerify}`, newConfirmationCode);
+      }
+      
+      // Send the new code via email
+      const emailSent = await sendVerificationEmail(emailToVerify, newConfirmationCode);
+      
+      if (emailSent) {
+        alert(`A new verification code has been sent to ${emailToVerify}.`);
+      } else {
+        alert(`A new verification code has been generated:\n\n${newConfirmationCode}\n\n(Email could not be sent. Using demo mode.)`);
+      }
+    }
   };
 
   const handleLogin = async (email: string, password: string): Promise<{success: boolean; error?: string}> => {
@@ -211,7 +250,7 @@ const App: React.FC = () => {
       case View.REGISTER:
         return <Register onRegister={handleRegister}/>;
       case View.VERIFY_EMAIL:
-        return <VerifyEmail email={emailToVerify} onVerify={handleVerifyEmail} setView={setView} />;
+        return <VerifyEmail email={emailToVerify} onVerify={handleVerifyEmail} onResend={handleResendCode} setView={setView} />;
       case View.MY_ITEMS:
         return currentUser ? <MyItems items={userItems} /> : <Login onLogin={handleLogin} setView={setView} />;
       case View.FEED:
