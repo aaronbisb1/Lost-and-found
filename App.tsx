@@ -45,7 +45,19 @@ const App: React.FC = () => {
       // Load users from Firebase
       const unsubscribeUsers = onValue(usersRef, (snapshot) => {
         const data = snapshot.val();
-        setUsers(data ? Object.values(data) : []);
+        const loadedUsers = data ? Object.values(data) : [];
+        
+        // Seed admin user if database is empty
+        if (loadedUsers.length === 0) {
+          hashPassword('schooladmin123').then(hash => {
+            const adminUser = { id: 'admin-user', email: 'admin@school.com', passwordHash: hash, isAdmin: true, isVerified: true };
+            setUsers([adminUser]);
+            // Save to Firebase
+            set(usersRef, { 'admin-user': adminUser }).catch(err => console.warn('Failed to seed admin user', err));
+          });
+        } else {
+          setUsers(loadedUsers);
+        }
       }, (error) => {
         console.warn('Failed to load users from Firebase, using localStorage', error);
         const savedUsers = localStorage.getItem('lostAndFoundUsers');
